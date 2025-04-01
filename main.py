@@ -45,27 +45,52 @@ def load_directory():
     untagged_dir = directory / UNTAGGED_DANCE_DIR
     tagged_videos = sorted(tagged_dir.glob("*.mp4"))
     untagged_videos = sorted(untagged_dir.glob("*.mp4"))
-    st.session_state["videos"] = {TAGGED: tagged_videos, UNTAGGED: untagged_videos}
+    st.session_state["videos"] = tagged_videos + untagged_videos
 
 
 def load_videos():
-    if st.session_state["current_video_idx"] >= len(
-        st.session_state["videos"][st.session_state["selection"]]
-    ):
+    data_path = Path(st.session_state["directory"]) / "data.csv"
+    df = pd.read_csv(
+        data_path,
+        dtype={
+            "day_dance_id": "string",
+            "waggle_id": "string",
+            "category": "Int64",
+            "category_label": "string",
+            "corrected_category": "Int64",
+            "corrected_category_label": "string",
+        },
+    )
+    rows_in_category = df.loc[
+        (df["category_label"] == st.session_state["selection"])
+        & (df["corrected_category_label"].isnull())
+        | (df["corrected_category_label"] == st.session_state["selection"])
+    ]
+    if st.session_state["current_video_idx"] >= rows_in_category.shape[0]:
+        st.write("nothing left")
         return
     with st.form("checkbox_form"):
         grid = [st.columns(cols, border=True) for _ in range(rows)]
         st.session_state["current_chunk"] = []
         for i in range(rows * cols):
+            if st.session_state["current_video_idx"] >= rows_in_category.shape[0]:
+                break
+            current_day_dance_id = rows_in_category.iat[
+                st.session_state["current_video_idx"], 0
+            ]
+            current_video = next(
+                (
+                    vid
+                    for vid in st.session_state["videos"]
+                    if vid.stem == current_day_dance_id
+                ),
+                None,
+            )
+            if current_video is None:
+                st.write("No matching video file found")
+                break
             row = int(math.floor(i / cols))
             col = i % cols
-            videos_in_category = st.session_state["videos"][
-                st.session_state["selection"]
-            ]
-            if st.session_state["current_video_idx"] >= len(videos_in_category):
-                continue
-            current_video = videos_in_category[st.session_state["current_video_idx"]]
-            current_day_dance_id = current_video.stem
             with grid[row][col]:
                 st.write(current_day_dance_id)
                 st.video(
@@ -77,9 +102,9 @@ def load_videos():
                     "Wrong Category",
                     key=current_day_dance_id,
                 )
-                st.session_state["current_video_idx"] += 1
+            st.session_state["current_video_idx"] += 1
             st.session_state["current_chunk"].append(current_day_dance_id)
-        st.form_submit_button("Save", on_click=save)
+        st.form_submit_button("Save", on_click=save_and_load_next)
 
 
 def load_stuff():
@@ -98,7 +123,11 @@ def switch_selection():
     load_videos()
 
 
-def save_data():
+def get_checked_day_dance_ids():
+    return [id for id in st.session_state["current_chunk"] if st.session_state[id]]
+
+
+def save_data(wrong_category_ids):
     data_path = Path(st.session_state["directory"]) / "data.csv"
     df = pd.read_csv(
         data_path,
@@ -112,9 +141,6 @@ def save_data():
             "corrected_category_label": "string",
         },
     )
-    wrong_category_ids = [
-        id for id in st.session_state["current_chunk"] if st.session_state[id]
-    ]
     for id in wrong_category_ids:
         corrected_category = df.at[id, "corrected_category"]
         if pd.isna(corrected_category):
@@ -133,8 +159,10 @@ def save_data():
     df.to_csv(data_path)
 
 
-def save():
-    save_data()
+def save_and_load_next():
+    checked_ids = get_checked_day_dance_ids()
+    st.session_state["current_video_idx"] -= len(checked_ids)
+    save_data(checked_ids)
     show_top()
     load_videos()
 
@@ -148,8 +176,10 @@ if __name__ == "__main__":
         st.session_state["selection"] = option_map[0]
     if "current_video_idx" not in st.session_state:
         st.session_state["current_video_idx"] = 0
+    if "current_day_dance_id" not in st.session_state:
+        st.session_state["current_day_dance_id"] = ""
     if "videos" not in st.session_state:
-        st.session_state["videos"] = {TAGGED: [], UNTAGGED: []}
+        st.session_state["videos"] = []
     if "current_chunk" not in st.session_state:
         st.session_state["current_chunk"] = []
     if "directory" not in st.session_state:
