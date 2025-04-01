@@ -1,6 +1,7 @@
 import math
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import streamlit as st
 
@@ -151,11 +152,8 @@ def save_data(wrong_category_ids):
                 "tagged" if category_label == "untagged" else "untagged"
             )
         else:
-            df.at[id, "corrected_category"] = 0 if corrected_category == 1 else 0
-            corrected_category_label = df.at[id, "corrected_category_label"]
-            df.at[id, "corrected_category_label"] = (
-                "tagged" if corrected_category_label == "untagged" else "untagged"
-            )
+            df.at[id, "corrected_category"] = np.nan
+            df.at[id, "corrected_category_label"] = ""
     df.to_csv(data_path)
 
 
