@@ -94,6 +94,20 @@ def load_videos():
             col = i % cols
             with grid[row][col]:
                 st.write(current_day_dance_id)
+                # Hide control bar on videos
+                st.html("""
+                <style>
+                video::-webkit-media-controls {
+                    display: none !important;
+                }
+                video::-webkit-media-controls-panel {
+                    display: none !important;
+                }
+                video::-webkit-media-controls-play-button {
+                    display: none !important;
+                }
+                </style>
+                """)
                 st.video(
                     current_video,
                     loop=True,
