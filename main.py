@@ -12,7 +12,7 @@ TAGGED = "tagged"
 UNTAGGED = "untagged"
 
 
-def show_top():
+def show_settings():
     is_expanded = st.session_state["directory"] is None
     with st.expander("Settings", expanded=is_expanded):
         with st.form("directory_form", border=False):
@@ -123,7 +123,7 @@ def load_videos():
 
 
 def load_stuff():
-    show_top()
+    show_settings()
     if st.session_state["directory"] is not None:
         load_directory()
         load_videos()
@@ -134,7 +134,7 @@ def switch_selection():
     st.session_state["selection"] = (
         TAGGED if st.session_state["selection"] == UNTAGGED else UNTAGGED
     )
-    show_top()
+    show_settings()
     load_videos()
 
 
@@ -175,7 +175,7 @@ def save_and_load_next():
     checked_ids = get_checked_day_dance_ids()
     st.session_state["current_video_idx"] -= len(checked_ids)
     save_data(checked_ids)
-    show_top()
+    show_settings()
     load_videos()
 
 
@@ -197,4 +197,4 @@ if __name__ == "__main__":
     if "directory" not in st.session_state:
         st.session_state["directory"] = None
         # start app
-        show_top()
+        show_settings()
