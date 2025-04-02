@@ -18,13 +18,12 @@ def show_settings():
         with st.form("directory_form", border=False):
             st.text_input("Directory", key="directory")
             st.form_submit_button("Load", on_click=load_stuff)
-        st.segmented_control(
+        st.radio(
             "-",
             options=option_map.keys(),
             format_func=lambda option: option_map[option].capitalize(),
-            selection_mode="single",
-            default=0,
             on_change=switch_selection,
+            horizontal=True,
         )
 
 
