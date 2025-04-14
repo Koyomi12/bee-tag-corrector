@@ -151,7 +151,11 @@ def show_videos():
                     day_dance_id
                 )
                 with cols_container[c]:
-                    st.write(day_dance_id)
+                    # "corrected_category_label" is assumed to be the seventh column
+                    if pd.isna(page_df.iat[idx, 6]):
+                        st.write(day_dance_id)
+                    else:
+                        st.write(f"{day_dance_id} - corrected")
                     if vid_path:
                         st.video(str(vid_path), loop=True, autoplay=True)
                     else:
