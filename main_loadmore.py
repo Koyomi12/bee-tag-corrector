@@ -1,6 +1,6 @@
 import math
-from pathlib import Path
 from functools import partial
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -14,14 +14,21 @@ TAGGED = "tagged"
 UNTAGGED = "untagged"
 
 # How many rows of videos to show per page (each page will have PAGE_ROWS * number_of_columns videos)
-PAGE_ROWS = 2  
+PAGE_ROWS = 2
 
 
 def show_settings():
     with st.expander("Settings", expanded=True):
         with st.form("directory_form", clear_on_submit=False):
             st.text_input("Directory", key="directory")
-            st.number_input("Number of columns", value=5, min_value=1, max_value=10, step=1, key="cols")
+            st.number_input(
+                "Number of columns",
+                value=5,
+                min_value=1,
+                max_value=10,
+                step=1,
+                key="cols",
+            )
             st.form_submit_button("Load", on_click=load_stuff)
         st.radio(
             "Category to Label",
@@ -46,7 +53,9 @@ def load_stuff():
     tagged_dir = directory / TAGGED_DANCE_DIR
     untagged_dir = directory / UNTAGGED_DANCE_DIR
     if not tagged_dir.exists() or not untagged_dir.exists():
-        st.warning(f"Could not find {TAGGED_DANCE_DIR} or {UNTAGGED_DANCE_DIR} in {directory}")
+        st.warning(
+            f"Could not find {TAGGED_DANCE_DIR} or {UNTAGGED_DANCE_DIR} in {directory}"
+        )
         return
 
     # Save video file paths (as Path objects) into session state
@@ -76,19 +85,24 @@ def reload_videos():
     if "data_df" not in st.session_state:
         return  # Nothing loaded yet
 
-    selected_label = option_map[st.session_state["category_selection"]]  # "tagged" or "untagged"
+    selected_label = option_map[
+        st.session_state["category_selection"]
+    ]  # "tagged" or "untagged"
     df = st.session_state["data_df"]
 
     # Filter rows: show if the original label equals selection and not yet corrected,
     # or if the corrected label equals the selection.
     rows_in_category = df.loc[
-        ((df["category_label"] == selected_label) & (df["corrected_category_label"].isnull()))
+        (
+            (df["category_label"] == selected_label)
+            & (df["corrected_category_label"].isnull())
+        )
         | (df["corrected_category_label"] == selected_label)
     ]
     st.session_state["rows_to_show"] = rows_in_category
 
     # Reset the pagination whenever the category changes.
-    st.session_state["current_page"] = 1    
+    st.session_state["current_page"] = 1
 
 
 def show_videos():
@@ -124,7 +138,9 @@ def show_videos():
         page_df = rows_to_show.iloc[start_idx:end_idx]
 
         # Use an expander for each page; the current page is expanded by default.
-        expander = st.expander(f"Page {page} of {total_pages}", expanded=(page == current_page))
+        expander = st.expander(
+            f"Page {page} of {total_pages}", expanded=(page == current_page)
+        )
         with expander.form(f"form_page_{page}"):
             # Render the videos in a grid with PAGE_ROWS rows and 'cols' columns.
             page_total = page_df.shape[0]
@@ -137,7 +153,9 @@ def show_videos():
                         break
                     # Get the day_dance_id (assumed to be the first column)
                     day_dance_id = page_df.iat[idx, 0]
-                    vid_path = tagged_lookup.get(day_dance_id) or untagged_lookup.get(day_dance_id)
+                    vid_path = tagged_lookup.get(day_dance_id) or untagged_lookup.get(
+                        day_dance_id
+                    )
                     with cols_container[c]:
                         st.write(day_dance_id)
                         if vid_path:
@@ -183,10 +201,14 @@ def on_save(page):
     # Update the CSV (stored in session_state["data_df"]) with corrections.
     df = st.session_state["data_df"]
     for d_id in checked_ids:
-        corrected_category = df.loc[df["day_dance_id"] == d_id, "corrected_category"].values[0]
+        corrected_category = df.loc[
+            df["day_dance_id"] == d_id, "corrected_category"
+        ].values[0]
         if pd.isna(corrected_category):
             category = df.loc[df["day_dance_id"] == d_id, "category"].values[0]
-            current_label = df.loc[df["day_dance_id"] == d_id, "category_label"].values[0]
+            current_label = df.loc[df["day_dance_id"] == d_id, "category_label"].values[
+                0
+            ]
             new_cat = 0 if category == 1 else 1
             df.loc[df["day_dance_id"] == d_id, "corrected_category"] = new_cat
             df.loc[df["day_dance_id"] == d_id, "corrected_category_label"] = (
@@ -234,3 +256,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
