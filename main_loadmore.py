@@ -156,20 +156,26 @@ def show_videos():
                         st.write("No video found")
                     st.checkbox("Wrong Category", key=day_dance_id)
 
-        # Determine the button label:
-        # If there are more pages, label "Save/Load Next".
-        # Otherwise (for current page with no further pages, or any previous page) label "Save".
-        if current_page < total_pages:
-            button_label = "Save/Load Next"
-        else:
-            button_label = "Save"
-        st.form_submit_button(button_label, on_click=partial(on_save, current_page))
+        # Column ratio is a guess and differs based on screen size and
+        # resolution. Streamlit doesn't have a good solution.
+        col1, col2, _ = st.columns([1, 1, 8])
+        with col1:
+            st.form_submit_button(
+                "Save/Load Previous",
+                disabled=current_page == 1,
+                on_click=partial(on_save, current_page, "previous"),
+            )
+        with col2:
+            st.form_submit_button(
+                "Save/Load Next" if current_page < total_pages else "Save",
+                on_click=partial(on_save, current_page, "next"),
+            )
 
 
-def on_save(page):
+def on_save(page, mode):
     """
-    Saves corrections for the given page. If additional pages remain,
-    increments the current_page to load the next page.
+    Saves corrections for the given page. Increments or decrements current_page
+    session_state based on mode.
     """
     cols = st.session_state.get("cols", 5)
     page_size = PAGE_ROWS * cols
@@ -216,9 +222,11 @@ def on_save(page):
     df.to_csv(data_path, index=False)
     st.success(f"Saved corrections for page {page}.")
 
-    # If more pages exist, increment current_page.
-    if page < total_pages:
+    # If more pages exist, increment or decrement current_page.
+    if page < total_pages and mode == "next":
         st.session_state["current_page"] = current_page + 1
+    elif page > 1 and mode == "previous":
+        st.session_state["current_page"] = current_page - 1
 
 
 def main():
