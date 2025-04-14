@@ -75,8 +75,9 @@ def load_stuff():
         },
     )
 
-    # Reset pagination state
+    # Reset pagination state and checkmarked_ids
     st.session_state["current_page"] = 1
+    st.session_state["checkmarked_ids"].clear()
     reload_videos()
 
 
@@ -101,8 +102,9 @@ def reload_videos():
     ]
     st.session_state["rows_to_show"] = rows_in_category
 
-    # Reset the pagination whenever the category changes.
+    # Reset the pagination and checkmarked_ids whenever the category changes.
     st.session_state["current_page"] = 1
+    st.session_state["checkmarked_ids"].clear()
 
 
 def show_videos():
@@ -154,7 +156,12 @@ def show_videos():
                         st.video(str(vid_path), loop=True, autoplay=True)
                     else:
                         st.write("No video found")
-                    st.checkbox("Wrong Category", key=day_dance_id)
+                    st.checkbox(
+                        "Wrong Category",
+                        key=day_dance_id,
+                        value=day_dance_id
+                        in st.session_state.get("checkmarked_ids", set()),
+                    )
 
         # Column ratio is a guess and differs based on screen size and
         # resolution. Streamlit doesn't have a good solution.
@@ -189,15 +196,32 @@ def on_save(page, mode):
     end_idx = min(page * page_size, total_videos)
     page_df = rows_to_show.iloc[start_idx:end_idx]
 
-    # Collect day_dance_ids for which "Wrong Category" is checked.
-    checked_ids = []
-    for d_id in page_df["day_dance_id"].tolist():
+    current_day_dance_ids = page_df["day_dance_id"].tolist()
+    # Collect day_dance_ids for which "Wrong Category" is checkmarked.
+    checkmarked_ids = set()
+    for d_id in current_day_dance_ids:
         if st.session_state.get(d_id, False):
-            checked_ids.append(d_id)
+            checkmarked_ids.add(d_id)
+            # Store day_dance_ids for which "Wrong Category" is checkmarked in
+            # separate session state, because the checkbox element keys are
+            # only stored in session state as long as they are being rendered
+            # and discarded when the next page is loaded.
+            st.session_state["checkmarked_ids"].add(d_id)
+
+    uncheckmarked_ids = (
+        st.session_state["checkmarked_ids"]
+        .difference(checkmarked_ids)
+        .intersection(current_day_dance_ids)
+    )
+
+    # Forget day_dance_ids for which "Wrong Category" was not checkmarked.
+    for id in uncheckmarked_ids:
+        st.session_state["checkmarked_ids"].discard(id)
 
     # Update the CSV (stored in session_state["data_df"]) with corrections.
     df = st.session_state["data_df"]
-    for d_id in checked_ids:
+    swap_category_ids = checkmarked_ids.union(uncheckmarked_ids)
+    for d_id in swap_category_ids:
         corrected_category = df.loc[
             df["day_dance_id"] == d_id, "corrected_category"
         ].values[0]
@@ -245,6 +269,8 @@ def main():
         st.session_state["untagged_videos"] = []
     if "current_page" not in st.session_state:
         st.session_state["current_page"] = 1
+    if "checkmarked_ids" not in st.session_state:
+        st.session_state["checkmarked_ids"] = set()
 
     global option_map
     option_map = {0: TAGGED, 1: UNTAGGED}
