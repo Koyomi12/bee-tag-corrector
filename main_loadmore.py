@@ -106,9 +106,7 @@ def reload_videos():
 
 
 def show_videos():
-    """Displays the videos as pages. Each page is rendered inside an expander containing a form.
-    The current page’s form includes the Save/Load Next button (if additional pages exist),
-    while previous pages’ forms simply include a Save button."""
+    """Displays the videos for the current page inside a grid."""
     if "rows_to_show" not in st.session_state:
         return
 
@@ -130,54 +128,47 @@ def show_videos():
     untagged_lookup = {v.stem: v for v in st.session_state.get("untagged_videos", [])}
 
     current_page = st.session_state.get("current_page", 1)
-    # Render pages 1 through current_page
-    for page in range(1, current_page + 1):
+    # Render videos for current_page in a grid with PAGE_ROWS rows and 'cols' columns.
+    st.markdown(f"Page {current_page} of {total_pages}")
+    with st.form("form_page"):
         # Calculate the subset of rows for this page
-        start_idx = (page - 1) * page_size
-        end_idx = min(page * page_size, total_videos)
+        start_idx = (current_page - 1) * page_size
+        end_idx = min(current_page * page_size, total_videos)
         page_df = rows_to_show.iloc[start_idx:end_idx]
+        page_total = page_df.shape[0]
+        n_grid_rows = math.ceil(page_total / cols)
+        for r in range(n_grid_rows):
+            cols_container = st.columns(cols)
+            for c in range(cols):
+                idx = r * cols + c
+                if idx >= page_total:
+                    break
+                # Get the day_dance_id (assumed to be the first column)
+                day_dance_id = page_df.iat[idx, 0]
+                vid_path = tagged_lookup.get(day_dance_id) or untagged_lookup.get(
+                    day_dance_id
+                )
+                with cols_container[c]:
+                    st.write(day_dance_id)
+                    if vid_path:
+                        st.video(str(vid_path), loop=True, autoplay=True)
+                    else:
+                        st.write("No video found")
+                    st.checkbox("Wrong Category", key=day_dance_id)
 
-        # Use an expander for each page; the current page is expanded by default.
-        expander = st.expander(
-            f"Page {page} of {total_pages}", expanded=(page == current_page)
-        )
-        with expander.form(f"form_page_{page}"):
-            # Render the videos in a grid with PAGE_ROWS rows and 'cols' columns.
-            page_total = page_df.shape[0]
-            n_grid_rows = math.ceil(page_total / cols)
-            for r in range(n_grid_rows):
-                cols_container = st.columns(cols)
-                for c in range(cols):
-                    idx = r * cols + c
-                    if idx >= page_total:
-                        break
-                    # Get the day_dance_id (assumed to be the first column)
-                    day_dance_id = page_df.iat[idx, 0]
-                    vid_path = tagged_lookup.get(day_dance_id) or untagged_lookup.get(
-                        day_dance_id
-                    )
-                    with cols_container[c]:
-                        st.write(day_dance_id)
-                        if vid_path:
-                            st.video(str(vid_path), loop=True, autoplay=True)
-                        else:
-                            st.write("No video found")
-                        st.checkbox("Wrong Category", key=day_dance_id)
-
-            # Determine the button label:
-            # For the current (active) page, if there are more pages, label "Save/Load Next".
-            # Otherwise (for current page with no further pages, or any previous page) label "Save".
-            if page == current_page and current_page < total_pages:
-                button_label = "Save/Load Next"
-            else:
-                button_label = "Save"
-            st.form_submit_button(button_label, on_click=partial(on_save, page))
+        # Determine the button label:
+        # If there are more pages, label "Save/Load Next".
+        # Otherwise (for current page with no further pages, or any previous page) label "Save".
+        if current_page < total_pages:
+            button_label = "Save/Load Next"
+        else:
+            button_label = "Save"
+        st.form_submit_button(button_label, on_click=partial(on_save, current_page))
 
 
 def on_save(page):
     """
-    Saves corrections for the given page.
-    If the submitted page is the current (active) page and additional pages remain,
+    Saves corrections for the given page. If additional pages remain,
     increments the current_page to load the next page.
     """
     cols = st.session_state.get("cols", 5)
@@ -225,8 +216,8 @@ def on_save(page):
     df.to_csv(data_path, index=False)
     st.success(f"Saved corrections for page {page}.")
 
-    # If the saved page is the active (current) page and more pages exist, increment current_page.
-    if page == current_page and page < total_pages:
+    # If more pages exist, increment current_page.
+    if page < total_pages:
         st.session_state["current_page"] = current_page + 1
 
 
@@ -256,4 +247,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
