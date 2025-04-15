@@ -58,9 +58,11 @@ def load_directory():
         )
         return
 
-    # Save video file paths (as Path objects) into session state
-    st.session_state["tagged_videos"] = sorted(tagged_dir.glob("*.mp4"))
-    st.session_state["untagged_videos"] = sorted(untagged_dir.glob("*.mp4"))
+    # Save video file paths (day_dance_id -> video file Path) into session state
+    st.session_state["videos"] = {
+        v.stem: v
+        for v in list(tagged_dir.glob("*.mp4")) + list(untagged_dir.glob("*.mp4"))
+    }
 
     # Load the CSV data into session state
     st.session_state["data_df"] = pd.read_csv(
@@ -125,10 +127,6 @@ def show_videos():
 
     st.markdown(f"**Total videos:** {total_videos} | **Pages:** {total_pages}")
 
-    # Retrieve video lookup dictionaries (day_dance_id -> video file Path)
-    tagged_lookup = {v.stem: v for v in st.session_state.get("tagged_videos", [])}
-    untagged_lookup = {v.stem: v for v in st.session_state.get("untagged_videos", [])}
-
     current_page = st.session_state.get("current_page", 1)
     # Render videos for current_page in a grid with PAGE_ROWS rows and 'cols' columns.
     st.markdown(f"Page {current_page} of {total_pages}")
@@ -147,15 +145,13 @@ def show_videos():
                     break
                 # Get the day_dance_id (assumed to be the first column)
                 day_dance_id = page_df.iat[idx, 0]
-                vid_path = tagged_lookup.get(day_dance_id) or untagged_lookup.get(
-                    day_dance_id
-                )
                 with cols_container[c]:
                     # "corrected_category_label" is assumed to be the seventh column
                     if pd.isna(page_df.iat[idx, 6]):
                         st.write(day_dance_id)
                     else:
                         st.write(f"{day_dance_id} - corrected")
+                    vid_path = st.session_state.get("videos", {}).get(day_dance_id)
                     if vid_path:
                         st.video(str(vid_path), loop=True, autoplay=True)
                     else:
@@ -267,10 +263,8 @@ def main():
         st.session_state["data_df"] = None
     if "rows_to_show" not in st.session_state:
         st.session_state["rows_to_show"] = pd.DataFrame()
-    if "tagged_videos" not in st.session_state:
-        st.session_state["tagged_videos"] = []
-    if "untagged_videos" not in st.session_state:
-        st.session_state["untagged_videos"] = []
+    if "videos" not in st.session_state:
+        st.session_state["videos"] = []
     if "current_page" not in st.session_state:
         st.session_state["current_page"] = 1
     if "checkmarked_ids" not in st.session_state:
