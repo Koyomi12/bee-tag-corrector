@@ -29,7 +29,7 @@ def show_settings():
                 step=1,
                 key="cols",
             )
-            st.form_submit_button("Load", on_click=load_stuff)
+            st.form_submit_button("Load", on_click=load_directory)
         st.radio(
             "Category to Label",
             options=option_map.keys(),
@@ -40,7 +40,7 @@ def show_settings():
         )
 
 
-def load_stuff():
+def load_directory():
     """Called when the user clicks Load after entering the directory."""
     directory = Path(st.session_state["directory"])
     data_path = directory / DATA_FILE
