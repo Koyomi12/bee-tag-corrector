@@ -1,10 +1,12 @@
 import math
+from functools import partial
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import streamlit as st
 
+# Constants for directory names and data file
 TAGGED_DANCE_DIR = "tagged-dances"
 UNTAGGED_DANCE_DIR = "untagged-dances"
 DATA_FILE = "data.csv"
@@ -13,139 +15,63 @@ UNTAGGED = "untagged"
 
 
 def show_settings():
-    is_expanded = st.session_state["directory"] is None
-    with st.expander("Settings", expanded=is_expanded):
-        with st.form("directory_form", border=False):
+    with st.expander("Settings", expanded=True):
+        with st.form("directory_form", clear_on_submit=False):
             st.text_input("Directory", key="directory")
-            st.form_submit_button("Load", on_click=load_stuff)
+            st.number_input(
+                "Number of rows",
+                value=2,
+                min_value=1,
+                max_value=5,
+                step=1,
+                key="rows",
+            )
+            st.number_input(
+                "Number of columns",
+                value=5,
+                min_value=1,
+                max_value=10,
+                step=1,
+                key="cols",
+            )
+            st.form_submit_button("Load", on_click=load_directory)
         st.radio(
-            "-",
+            "Category to Label",
             options=option_map.keys(),
             format_func=lambda option: option_map[option].capitalize(),
-            on_change=switch_selection,
+            key="category_selection",
+            on_change=reload_videos,
             horizontal=True,
         )
 
 
 def load_directory():
-    st.session_state["current_video_idx"] = 0
+    """Called when the user clicks Load after entering the directory."""
     directory = Path(st.session_state["directory"])
-    data_path = directory / "data.csv"
+    data_path = directory / DATA_FILE
+
     if not data_path.exists():
-        st.text(f"Could not find {DATA_FILE}")
+        st.warning(f"Could not find {DATA_FILE} in {directory}")
         return
-    files = list(directory.glob("*"))
-    filenames = [file.name for file in files]
-    if TAGGED_DANCE_DIR not in filenames and UNTAGGED_DANCE_DIR not in filenames:
-        st.text(
-            f"Could not find {TAGGED_DANCE_DIR} and/or {UNTAGGED_DANCE_DIR} directory"
-        )
-        return
+
+    # Check if subdirectories exist
     tagged_dir = directory / TAGGED_DANCE_DIR
     untagged_dir = directory / UNTAGGED_DANCE_DIR
-    tagged_videos = sorted(tagged_dir.glob("*.mp4"))
-    untagged_videos = sorted(untagged_dir.glob("*.mp4"))
-    st.session_state["videos"] = tagged_videos + untagged_videos
-
-
-def load_videos():
-    data_path = Path(st.session_state["directory"]) / "data.csv"
-    df = pd.read_csv(
-        data_path,
-        dtype={
-            "day_dance_id": "string",
-            "waggle_id": "string",
-            "category": "Int64",
-            "category_label": "string",
-            "corrected_category": "Int64",
-            "corrected_category_label": "string",
-        },
-    )
-    rows_in_category = df.loc[
-        (df["category_label"] == st.session_state["selection"])
-        & (df["corrected_category_label"].isnull())
-        | (df["corrected_category_label"] == st.session_state["selection"])
-    ]
-    if st.session_state["current_video_idx"] >= rows_in_category.shape[0]:
-        st.write("nothing left")
+    if not tagged_dir.exists() or not untagged_dir.exists():
+        st.warning(
+            f"Could not find {TAGGED_DANCE_DIR} or {UNTAGGED_DANCE_DIR} in {directory}"
+        )
         return
-    with st.form("checkbox_form"):
-        grid = [st.columns(cols, border=True) for _ in range(rows)]
-        st.session_state["current_chunk"] = []
-        for i in range(rows * cols):
-            if st.session_state["current_video_idx"] >= rows_in_category.shape[0]:
-                break
-            current_day_dance_id = rows_in_category.iat[
-                st.session_state["current_video_idx"], 0
-            ]
-            current_video = next(
-                (
-                    vid
-                    for vid in st.session_state["videos"]
-                    if vid.stem == current_day_dance_id
-                ),
-                None,
-            )
-            if current_video is None:
-                st.write("No matching video file found")
-                break
-            row = int(math.floor(i / cols))
-            col = i % cols
-            with grid[row][col]:
-                st.write(current_day_dance_id)
-                # Hide control bar on videos
-                st.html("""
-                <style>
-                video::-webkit-media-controls {
-                    display: none !important;
-                }
-                video::-webkit-media-controls-panel {
-                    display: none !important;
-                }
-                video::-webkit-media-controls-play-button {
-                    display: none !important;
-                }
-                </style>
-                """)
-                st.video(
-                    current_video,
-                    loop=True,
-                    autoplay=True,
-                )
-                st.checkbox(
-                    "Wrong Category",
-                    key=current_day_dance_id,
-                )
-            st.session_state["current_video_idx"] += 1
-            st.session_state["current_chunk"].append(current_day_dance_id)
-        st.form_submit_button("Save", on_click=save_and_load_next)
 
+    # Save video file paths (day_dance_id -> video file Path) into session state
+    st.session_state["videos"] = {
+        v.stem: v
+        for v in list(tagged_dir.glob("*.mp4")) + list(untagged_dir.glob("*.mp4"))
+    }
 
-def load_stuff():
-    show_settings()
-    if st.session_state["directory"] is not None:
-        load_directory()
-        load_videos()
-
-
-def switch_selection():
-    st.session_state["current_video_idx"] = 0
-    st.session_state["selection"] = (
-        TAGGED if st.session_state["selection"] == UNTAGGED else UNTAGGED
-    )
-    show_settings()
-    load_videos()
-
-
-def get_checked_day_dance_ids():
-    return [id for id in st.session_state["current_chunk"] if st.session_state[id]]
-
-
-def save_data(wrong_category_ids):
-    data_path = Path(st.session_state["directory"]) / "data.csv"
-    df = pd.read_csv(
+    # Load the CSV data into session state
+    st.session_state["data_df"] = pd.read_csv(
         data_path,
-        index_col="day_dance_id",
         dtype={
             "day_dance_id": "string",
             "waggle_id": "string",
@@ -155,45 +81,219 @@ def save_data(wrong_category_ids):
             "corrected_category_label": "string",
         },
     )
-    for id in wrong_category_ids:
-        corrected_category = df.at[id, "corrected_category"]
-        if pd.isna(corrected_category):
-            category = df.at[id, "category"]
-            df.at[id, "corrected_category"] = 0 if category == 1 else 1
-            category_label = df.at[id, "category_label"]
-            df.at[id, "corrected_category_label"] = (
-                "tagged" if category_label == "untagged" else "untagged"
+
+    # Reset pagination state and checkmarked_ids
+    st.session_state["current_page"] = 1
+    st.session_state["checkmarked_ids"].clear()
+    reload_videos()
+
+
+def reload_videos():
+    """Filters the CSV data for the selected category and stores the rows to show."""
+    if "data_df" not in st.session_state:
+        return  # Nothing loaded yet
+
+    selected_label = option_map[
+        st.session_state["category_selection"]
+    ]  # "tagged" or "untagged"
+    df = st.session_state["data_df"]
+
+    # Filter rows: show if the original label equals selection and not yet corrected,
+    # or if the corrected label equals the selection.
+    rows_in_category = df.loc[
+        (
+            (df["category_label"] == selected_label)
+            & (df["corrected_category_label"].isnull())
+        )
+        | (df["corrected_category_label"] == selected_label)
+    ]
+    st.session_state["rows_to_show"] = rows_in_category
+
+    # Reset the pagination and checkmarked_ids whenever the category changes.
+    st.session_state["current_page"] = 1
+    st.session_state["checkmarked_ids"].clear()
+
+
+def show_videos():
+    """Displays the videos for the current page inside a grid."""
+    if "rows_to_show" not in st.session_state:
+        return
+
+    rows_to_show = st.session_state["rows_to_show"]
+    if rows_to_show.empty:
+        st.write("No videos found for this category.")
+        return
+
+    rows = st.session_state["rows"]
+    cols = st.session_state["cols"]
+    page_size = rows * cols
+    total_videos = rows_to_show.shape[0]
+    total_pages = math.ceil(total_videos / page_size)
+
+    st.markdown(f"**Total videos:** {total_videos} | **Pages:** {total_pages}")
+
+    current_page = st.session_state.get("current_page", 1)
+    # Render videos for current_page in a grid with PAGE_ROWS rows and 'cols' columns.
+    st.markdown(f"Page {current_page} of {total_pages}")
+    with st.form("form_page"):
+        # Calculate the subset of rows for this page
+        start_idx = (current_page - 1) * page_size
+        end_idx = min(current_page * page_size, total_videos)
+        page_df = rows_to_show.iloc[start_idx:end_idx]
+        page_total = page_df.shape[0]
+        n_grid_rows = math.ceil(page_total / cols)
+        for r in range(n_grid_rows):
+            cols_container = st.columns(cols, border=True)
+            for c in range(cols):
+                idx = r * cols + c
+                if idx >= page_total:
+                    break
+                # Get the day_dance_id (assumed to be the first column)
+                day_dance_id = page_df.iat[idx, 0]
+                with cols_container[c]:
+                    # "corrected_category_label" is assumed to be the seventh column
+                    if pd.isna(page_df.iat[idx, 6]):
+                        st.write(day_dance_id)
+                    else:
+                        st.write(f"{day_dance_id} - corrected")
+                    vid_path = st.session_state.get("videos", {}).get(day_dance_id)
+                    if vid_path:
+                        st.video(str(vid_path), loop=True, autoplay=True)
+                    else:
+                        st.write("No video found")
+                    st.checkbox(
+                        "Wrong Category",
+                        key=day_dance_id,
+                        value=day_dance_id
+                        in st.session_state.get("checkmarked_ids", set()),
+                    )
+
+        # Column ratio is a guess and differs based on screen size and
+        # resolution. Streamlit doesn't have a good solution.
+        col1, col2, _ = st.columns([1, 1, 8])
+        with col1:
+            st.form_submit_button(
+                "Save/Load Previous",
+                disabled=current_page == 1,
+                on_click=partial(on_save, current_page, "previous"),
             )
+        with col2:
+            st.form_submit_button(
+                "Save/Load Next" if current_page < total_pages else "Save",
+                on_click=partial(on_save, current_page, "next"),
+            )
+
+
+def on_save(page, mode):
+    """
+    Saves corrections for the given page. Increments or decrements current_page
+    session_state based on mode.
+    """
+    rows = st.session_state["rows"]
+    cols = st.session_state["cols"]
+    page_size = rows * cols
+    rows_to_show = st.session_state["rows_to_show"]
+    total_videos = rows_to_show.shape[0]
+    total_pages = math.ceil(total_videos / page_size)
+    current_page = st.session_state.get("current_page", 1)
+
+    # Determine the rows corresponding to this page.
+    start_idx = (page - 1) * page_size
+    end_idx = min(page * page_size, total_videos)
+    page_df = rows_to_show.iloc[start_idx:end_idx]
+
+    current_day_dance_ids = page_df["day_dance_id"].tolist()
+    # Collect day_dance_ids for which "Wrong Category" is checkmarked.
+    checkmarked_ids = set()
+    for d_id in current_day_dance_ids:
+        if st.session_state.get(d_id, False):
+            checkmarked_ids.add(d_id)
+            # Store day_dance_ids for which "Wrong Category" is checkmarked in
+            # separate session state, because the checkbox element keys are
+            # only stored in session state as long as they are being rendered
+            # and discarded when the next page is loaded.
+            st.session_state["checkmarked_ids"].add(d_id)
+
+    uncheckmarked_ids = (
+        st.session_state["checkmarked_ids"]
+        .difference(checkmarked_ids)
+        .intersection(current_day_dance_ids)
+    )
+
+    # Forget day_dance_ids for which "Wrong Category" was not checkmarked.
+    for id in uncheckmarked_ids:
+        st.session_state["checkmarked_ids"].discard(id)
+
+    # Update the CSV (stored in session_state["data_df"]) with corrections and
+    # move videos into appropriate directories.
+    root_dir = Path(st.session_state["directory"])
+    df = st.session_state["data_df"]
+    swap_category_ids = checkmarked_ids.union(uncheckmarked_ids)
+    for d_id in swap_category_ids:
+        corrected_category = df.loc[
+            df["day_dance_id"] == d_id, "corrected_category"
+        ].values[0]
+        current_label = df.loc[df["day_dance_id"] == d_id, "category_label"].values[0]
+        if pd.isna(corrected_category):
+            new_category, new_label, dance_dir = (
+                (0, TAGGED, TAGGED_DANCE_DIR)
+                if current_label == UNTAGGED
+                else (1, UNTAGGED, UNTAGGED_DANCE_DIR)
+            )
+            df.loc[df["day_dance_id"] == d_id, "corrected_category"] = new_category
+            df.loc[df["day_dance_id"] == d_id, "corrected_category_label"] = new_label
         else:
-            df.at[id, "corrected_category"] = np.nan
-            df.at[id, "corrected_category_label"] = ""
-    df.to_csv(data_path)
+            df.loc[df["day_dance_id"] == d_id, "corrected_category"] = np.nan
+            df.loc[df["day_dance_id"] == d_id, "corrected_category_label"] = np.nan
+            dance_dir = (
+                TAGGED_DANCE_DIR if current_label == TAGGED else UNTAGGED_DANCE_DIR
+            )
+        source = st.session_state["videos"][d_id]
+        destination = root_dir.joinpath(dance_dir, source.name)
+        move_file(source, destination)
+        st.session_state["videos"][d_id] = destination
+    st.session_state["data_df"] = df
+
+    # Save the CSV back to disk.
+    data_path = root_dir / DATA_FILE
+    df.to_csv(data_path, index=False)
+    st.success(f"Saved corrections for page {page}.")
+
+    # If more pages exist, increment or decrement current_page.
+    if page < total_pages and mode == "next":
+        st.session_state["current_page"] = current_page + 1
+    elif page > 1 and mode == "previous":
+        st.session_state["current_page"] = current_page - 1
 
 
-def save_and_load_next():
-    checked_ids = get_checked_day_dance_ids()
-    st.session_state["current_video_idx"] -= len(checked_ids)
-    save_data(checked_ids)
+def move_file(source, destination):
+    if not destination.exists():
+        source.replace(destination)
+
+
+def main():
+    st.set_page_config(page_title="Bee Tag Corrector", layout="wide")
+
+    # Initialize session state variables if they don't exist
+    if "directory" not in st.session_state:
+        st.session_state["directory"] = None
+    if "data_df" not in st.session_state:
+        st.session_state["data_df"] = None
+    if "rows_to_show" not in st.session_state:
+        st.session_state["rows_to_show"] = pd.DataFrame()
+    if "videos" not in st.session_state:
+        st.session_state["videos"] = []
+    if "current_page" not in st.session_state:
+        st.session_state["current_page"] = 1
+    if "checkmarked_ids" not in st.session_state:
+        st.session_state["checkmarked_ids"] = set()
+
+    global option_map
+    option_map = {0: TAGGED, 1: UNTAGGED}
+
     show_settings()
-    load_videos()
+    show_videos()
 
 
 if __name__ == "__main__":
-    cols = 5
-    rows = 2
-    st.set_page_config(page_title="Bee Tag Corrector", layout="wide")
-    option_map = {0: TAGGED, 1: UNTAGGED}
-    if "selection" not in st.session_state:
-        st.session_state["selection"] = option_map[0]
-    if "current_video_idx" not in st.session_state:
-        st.session_state["current_video_idx"] = 0
-    if "current_day_dance_id" not in st.session_state:
-        st.session_state["current_day_dance_id"] = ""
-    if "videos" not in st.session_state:
-        st.session_state["videos"] = []
-    if "current_chunk" not in st.session_state:
-        st.session_state["current_chunk"] = []
-    if "directory" not in st.session_state:
-        st.session_state["directory"] = None
-        # start app
-        show_settings()
+    main()
