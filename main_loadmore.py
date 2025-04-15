@@ -140,7 +140,7 @@ def show_videos():
         page_total = page_df.shape[0]
         n_grid_rows = math.ceil(page_total / cols)
         for r in range(n_grid_rows):
-            cols_container = st.columns(cols)
+            cols_container = st.columns(cols, border=True)
             for c in range(cols):
                 idx = r * cols + c
                 if idx >= page_total:
