@@ -241,7 +241,7 @@ def on_save(page, mode):
             )
         else:
             df.loc[df["day_dance_id"] == d_id, "corrected_category"] = np.nan
-            df.loc[df["day_dance_id"] == d_id, "corrected_category_label"] = ""
+            df.loc[df["day_dance_id"] == d_id, "corrected_category_label"] = np.nan
     st.session_state["data_df"] = df
 
     # Save the CSV back to disk.
