@@ -13,14 +13,19 @@ DATA_FILE = "data.csv"
 TAGGED = "tagged"
 UNTAGGED = "untagged"
 
-# How many rows of videos to show per page (each page will have PAGE_ROWS * number_of_columns videos)
-PAGE_ROWS = 2
-
 
 def show_settings():
     with st.expander("Settings", expanded=True):
         with st.form("directory_form", clear_on_submit=False):
             st.text_input("Directory", key="directory")
+            st.number_input(
+                "Number of rows",
+                value=2,
+                min_value=1,
+                max_value=5,
+                step=1,
+                key="rows",
+            )
             st.number_input(
                 "Number of columns",
                 value=5,
@@ -119,9 +124,9 @@ def show_videos():
         st.write("No videos found for this category.")
         return
 
-    # Get user-specified number of columns (default is 5)
-    cols = st.session_state.get("cols", 5)
-    page_size = PAGE_ROWS * cols
+    rows = st.session_state["rows"]
+    cols = st.session_state["cols"]
+    page_size = rows * cols
     total_videos = rows_to_show.shape[0]
     total_pages = math.ceil(total_videos / page_size)
 
@@ -184,8 +189,9 @@ def on_save(page, mode):
     Saves corrections for the given page. Increments or decrements current_page
     session_state based on mode.
     """
-    cols = st.session_state.get("cols", 5)
-    page_size = PAGE_ROWS * cols
+    rows = st.session_state["rows"]
+    cols = st.session_state["cols"]
+    page_size = rows * cols
     rows_to_show = st.session_state["rows_to_show"]
     total_videos = rows_to_show.shape[0]
     total_pages = math.ceil(total_videos / page_size)
