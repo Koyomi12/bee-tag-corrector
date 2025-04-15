@@ -218,31 +218,38 @@ def on_save(page, mode):
     for id in uncheckmarked_ids:
         st.session_state["checkmarked_ids"].discard(id)
 
-    # Update the CSV (stored in session_state["data_df"]) with corrections.
+    # Update the CSV (stored in session_state["data_df"]) with corrections and
+    # move videos into appropriate directories.
+    root_dir = Path(st.session_state["directory"])
     df = st.session_state["data_df"]
     swap_category_ids = checkmarked_ids.union(uncheckmarked_ids)
     for d_id in swap_category_ids:
         corrected_category = df.loc[
             df["day_dance_id"] == d_id, "corrected_category"
         ].values[0]
+        current_label = df.loc[df["day_dance_id"] == d_id, "category_label"].values[0]
         if pd.isna(corrected_category):
-            category = df.loc[df["day_dance_id"] == d_id, "category"].values[0]
-            current_label = df.loc[df["day_dance_id"] == d_id, "category_label"].values[
-                0
-            ]
-            new_cat = 0 if category == 1 else 1
-            df.loc[df["day_dance_id"] == d_id, "corrected_category"] = new_cat
-            df.loc[df["day_dance_id"] == d_id, "corrected_category_label"] = (
-                TAGGED if current_label == UNTAGGED else UNTAGGED
+            new_category, new_label, dance_dir = (
+                (0, TAGGED, TAGGED_DANCE_DIR)
+                if current_label == UNTAGGED
+                else (1, UNTAGGED, UNTAGGED_DANCE_DIR)
             )
+            df.loc[df["day_dance_id"] == d_id, "corrected_category"] = new_category
+            df.loc[df["day_dance_id"] == d_id, "corrected_category_label"] = new_label
         else:
             df.loc[df["day_dance_id"] == d_id, "corrected_category"] = np.nan
             df.loc[df["day_dance_id"] == d_id, "corrected_category_label"] = np.nan
+            dance_dir = (
+                TAGGED_DANCE_DIR if current_label == TAGGED else UNTAGGED_DANCE_DIR
+            )
+        source = st.session_state["videos"][d_id]
+        destination = root_dir.joinpath(dance_dir, source.name)
+        move_file(source, destination)
+        st.session_state["videos"][d_id] = destination
     st.session_state["data_df"] = df
 
     # Save the CSV back to disk.
-    directory = Path(st.session_state["directory"])
-    data_path = directory / DATA_FILE
+    data_path = root_dir / DATA_FILE
     df.to_csv(data_path, index=False)
     st.success(f"Saved corrections for page {page}.")
 
@@ -251,6 +258,11 @@ def on_save(page, mode):
         st.session_state["current_page"] = current_page + 1
     elif page > 1 and mode == "previous":
         st.session_state["current_page"] = current_page - 1
+
+
+def move_file(source, destination):
+    if not destination.exists():
+        source.replace(destination)
 
 
 def main():
