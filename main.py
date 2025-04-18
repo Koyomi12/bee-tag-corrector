@@ -1,4 +1,5 @@
 import math
+from enum import Enum
 from functools import partial
 from pathlib import Path
 
@@ -13,6 +14,7 @@ DATA_FILE = "data.csv"
 TAGGED = "tagged"
 UNTAGGED = "untagged"
 OPTION_MAP = {0: TAGGED, 1: UNTAGGED}
+DanceType = Enum("DanceType", ["waggle", "round", "tremble", "mixed", "other"])
 
 
 def show_settings():
@@ -80,12 +82,26 @@ def load_directory():
             "category_label": "string",
             "corrected_category": "Int64",
             "corrected_category_label": "string",
+            "dance_type": "string",
+            "corrected_dance_type": "string",
         },
     )
 
     # Reset pagination state and checkmarked_ids
     st.session_state["current_page"] = 1
     st.session_state["checkmarked_ids"].clear()
+
+    # Init dance_types
+    # This is necessary because we need to remember these values even if the current page changes.
+    df = st.session_state["data_df"]
+    for _, row in df.iterrows():
+        day_dance_id = row["day_dance_id"]
+        corrected_dance_type = row["corrected_dance_type"]
+        dance_type = row["dance_type"]
+        st.session_state["dance_types"][day_dance_id] = (
+            corrected_dance_type if not pd.isna(corrected_dance_type) else dance_type
+        )
+
     reload_videos()
 
 
@@ -168,6 +184,18 @@ def show_videos():
                         value=day_dance_id
                         in st.session_state.get("checkmarked_ids", set()),
                     )
+                    dance_type = st.session_state["dance_types"][day_dance_id]
+                    st.radio(
+                        "Dance Type",
+                        options=DanceType._member_names_,
+                        # format_func=lambda option: DanceType[option]
+                        # .name[0]
+                        # .capitalize(),
+                        format_func=lambda option: DanceType[option].name.capitalize(),
+                        key=f"{day_dance_id}_dance_type",
+                        index=DanceType._member_names_.index(dance_type),
+                        horizontal=True,
+                    )
 
         # Column ratio is a guess and differs based on screen size and
         # resolution. Streamlit doesn't have a good solution.
@@ -225,34 +253,51 @@ def on_save(page, mode):
     for id in uncheckmarked_ids:
         st.session_state["checkmarked_ids"].discard(id)
 
+    # Update dance types
+    # This is necessary because st.session_state[f"{d_id}_dance_type"] only
+    # exists as long as the corresponding radio buttons are being rendered. If
+    # the current page changes, those items are deleted.
+    for d_id in current_day_dance_ids:
+        st.session_state["dance_types"][d_id] = st.session_state[f"{d_id}_dance_type"]
+
     # Update the CSV (stored in session_state["data_df"]) with corrections and
     # move videos into appropriate directories.
     root_dir = Path(st.session_state["directory"])
     df = st.session_state["data_df"]
     swap_category_ids = checkmarked_ids.union(uncheckmarked_ids)
-    for d_id in swap_category_ids:
-        corrected_category = df.loc[
-            df["day_dance_id"] == d_id, "corrected_category"
-        ].values[0]
-        current_label = df.loc[df["day_dance_id"] == d_id, "category_label"].values[0]
-        if pd.isna(corrected_category):
-            new_category, new_label, dance_dir = (
-                (0, TAGGED, TAGGED_DANCE_DIR)
-                if current_label == UNTAGGED
-                else (1, UNTAGGED, UNTAGGED_DANCE_DIR)
-            )
-            df.loc[df["day_dance_id"] == d_id, "corrected_category"] = new_category
-            df.loc[df["day_dance_id"] == d_id, "corrected_category_label"] = new_label
+    for d_id in current_day_dance_ids:
+        dance_type = st.session_state[f"{d_id}_dance_type"]
+        if dance_type == DanceType.waggle.name:
+            df.loc[df["day_dance_id"] == d_id, "corrected_dance_type"] = np.nan
         else:
-            df.loc[df["day_dance_id"] == d_id, "corrected_category"] = np.nan
-            df.loc[df["day_dance_id"] == d_id, "corrected_category_label"] = np.nan
-            dance_dir = (
-                TAGGED_DANCE_DIR if current_label == TAGGED else UNTAGGED_DANCE_DIR
-            )
-        source = st.session_state["videos"][d_id]
-        destination = root_dir.joinpath(dance_dir, source.name)
-        move_file(source, destination)
-        st.session_state["videos"][d_id] = destination
+            df.loc[df["day_dance_id"] == d_id, "corrected_dance_type"] = dance_type
+        if d_id in swap_category_ids:
+            corrected_category = df.loc[
+                df["day_dance_id"] == d_id, "corrected_category"
+            ].values[0]
+            current_label = df.loc[df["day_dance_id"] == d_id, "category_label"].values[
+                0
+            ]
+            if pd.isna(corrected_category):
+                new_category, new_label, dance_dir = (
+                    (0, TAGGED, TAGGED_DANCE_DIR)
+                    if current_label == UNTAGGED
+                    else (1, UNTAGGED, UNTAGGED_DANCE_DIR)
+                )
+                df.loc[df["day_dance_id"] == d_id, "corrected_category"] = new_category
+                df.loc[df["day_dance_id"] == d_id, "corrected_category_label"] = (
+                    new_label
+                )
+            else:
+                df.loc[df["day_dance_id"] == d_id, "corrected_category"] = np.nan
+                df.loc[df["day_dance_id"] == d_id, "corrected_category_label"] = np.nan
+                dance_dir = (
+                    TAGGED_DANCE_DIR if current_label == TAGGED else UNTAGGED_DANCE_DIR
+                )
+            source = st.session_state["videos"][d_id]
+            destination = root_dir.joinpath(dance_dir, source.name)
+            move_file(source, destination)
+            st.session_state["videos"][d_id] = destination
     st.session_state["data_df"] = df
 
     # Save the CSV back to disk.
@@ -288,6 +333,8 @@ def main():
         st.session_state["current_page"] = 1
     if "checkmarked_ids" not in st.session_state:
         st.session_state["checkmarked_ids"] = set()
+    if "dance_types" not in st.session_state:
+        st.session_state["dance_types"] = dict()
 
     show_settings()
     show_videos()
