@@ -12,6 +12,7 @@ UNTAGGED_DANCE_DIR = "untagged-dances"
 DATA_FILE = "data.csv"
 TAGGED = "tagged"
 UNTAGGED = "untagged"
+OPTION_MAP = {0: TAGGED, 1: UNTAGGED}
 
 
 def show_settings():
@@ -37,8 +38,8 @@ def show_settings():
             st.form_submit_button("Load", on_click=load_directory)
         st.radio(
             "Category to Label",
-            options=option_map.keys(),
-            format_func=lambda option: option_map[option].capitalize(),
+            options=OPTION_MAP.keys(),
+            format_func=lambda option: OPTION_MAP[option].capitalize(),
             key="category_selection",
             on_change=reload_videos,
             horizontal=True,
@@ -93,7 +94,7 @@ def reload_videos():
     if "data_df" not in st.session_state:
         return  # Nothing loaded yet
 
-    selected_label = option_map[
+    selected_label = OPTION_MAP[
         st.session_state["category_selection"]
     ]  # "tagged" or "untagged"
     df = st.session_state["data_df"]
@@ -287,9 +288,6 @@ def main():
         st.session_state["current_page"] = 1
     if "checkmarked_ids" not in st.session_state:
         st.session_state["checkmarked_ids"] = set()
-
-    global option_map
-    option_map = {0: TAGGED, 1: UNTAGGED}
 
     show_settings()
     show_videos()
