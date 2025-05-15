@@ -18,7 +18,13 @@ class TagStatus(Enum):
     untagged = 1
 
 
-DanceType = Enum("DanceType", ["waggle", "round", "tremble", "mixed", "other"])
+class DanceType(Enum):
+    waggle = "waggle"
+    round = "round"
+    tremble = "tremble"
+    mixed = "mixed"
+    other = "other"
+
 
 OPTION_MAP = {0: TagStatus.tagged.name, 1: TagStatus.untagged.name}
 
