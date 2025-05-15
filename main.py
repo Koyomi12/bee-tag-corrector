@@ -11,10 +11,16 @@ import streamlit as st
 TAGGED_DANCE_DIR = "tagged-dances"
 UNTAGGED_DANCE_DIR = "untagged-dances"
 DATA_FILE = "data.csv"
-TAGGED = "tagged"
-UNTAGGED = "untagged"
-OPTION_MAP = {0: TAGGED, 1: UNTAGGED}
+
+
+class TagStatus(Enum):
+    tagged = 0
+    untagged = 1
+
+
 DanceType = Enum("DanceType", ["waggle", "round", "tremble", "mixed", "other"])
+
+OPTION_MAP = {0: TagStatus.tagged.name, 1: TagStatus.untagged.name}
 
 
 def show_settings():
@@ -280,9 +286,9 @@ def on_save(page, mode):
             ]
             if pd.isna(corrected_category):
                 new_category, new_label, dance_dir = (
-                    (0, TAGGED, TAGGED_DANCE_DIR)
-                    if current_label == UNTAGGED
-                    else (1, UNTAGGED, UNTAGGED_DANCE_DIR)
+                    (0, TagStatus.tagged.name, TAGGED_DANCE_DIR)
+                    if current_label == TagStatus.untagged.name
+                    else (1, TagStatus.untagged.name, UNTAGGED_DANCE_DIR)
                 )
                 df.loc[df["day_dance_id"] == d_id, "corrected_category"] = new_category
                 df.loc[df["day_dance_id"] == d_id, "corrected_category_label"] = (
@@ -292,7 +298,9 @@ def on_save(page, mode):
                 df.loc[df["day_dance_id"] == d_id, "corrected_category"] = np.nan
                 df.loc[df["day_dance_id"] == d_id, "corrected_category_label"] = np.nan
                 dance_dir = (
-                    TAGGED_DANCE_DIR if current_label == TAGGED else UNTAGGED_DANCE_DIR
+                    TAGGED_DANCE_DIR
+                    if current_label == TagStatus.tagged.name
+                    else UNTAGGED_DANCE_DIR
                 )
             source = st.session_state["videos"][d_id]
             destination = root_dir.joinpath(dance_dir, source.name)
