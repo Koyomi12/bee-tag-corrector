@@ -99,9 +99,9 @@ def load_directory():
         },
     )
 
-    # Reset pagination state and checkmarked_ids
+    # Reset pagination state and checkmarks
     st.session_state["current_page"] = 1
-    st.session_state["checkmarked_ids"].clear()
+    st.session_state["checkmarked_per_page"] = {}
 
     # Init dance_types
     # This is necessary because we need to remember these values even if the current page changes.
@@ -138,9 +138,9 @@ def reload_videos():
     ]
     st.session_state["rows_to_show"] = rows_in_category
 
-    # Reset the pagination and checkmarked_ids whenever the category changes.
+    # Reset the pagination and checkmarks whenever the category changes.
     st.session_state["current_page"] = 1
-    st.session_state["checkmarked_ids"].clear()
+    st.session_state["checkmarked_per_page"] = {}
 
 
 def show_videos():
@@ -194,7 +194,10 @@ def show_videos():
                         "Wrong Category",
                         key=day_dance_id,
                         value=day_dance_id
-                        in st.session_state.get("checkmarked_ids", set()),
+                        # in st.session_state.get("checkmarked_ids", set()),
+                        in st.session_state["checkmarked_per_page"].get(
+                            current_page, set()
+                        ),
                     )
                     dance_type = st.session_state["dance_types"][day_dance_id]
                     st.radio(
@@ -244,26 +247,6 @@ def on_save(page, mode):
     page_df = rows_to_show.iloc[start_idx:end_idx]
 
     current_day_dance_ids = page_df["day_dance_id"].tolist()
-    # Collect day_dance_ids for which "Wrong Category" is checkmarked.
-    checkmarked_ids = set()
-    for d_id in current_day_dance_ids:
-        if st.session_state.get(d_id, False):
-            checkmarked_ids.add(d_id)
-            # Store day_dance_ids for which "Wrong Category" is checkmarked in
-            # separate session state, because the checkbox element keys are
-            # only stored in session state as long as they are being rendered
-            # and discarded when the next page is loaded.
-            st.session_state["checkmarked_ids"].add(d_id)
-
-    uncheckmarked_ids = (
-        st.session_state["checkmarked_ids"]
-        .difference(checkmarked_ids)
-        .intersection(current_day_dance_ids)
-    )
-
-    # Forget day_dance_ids for which "Wrong Category" was not checkmarked.
-    for id in uncheckmarked_ids:
-        st.session_state["checkmarked_ids"].discard(id)
 
     # Update dance types
     # This is necessary because st.session_state[f"{d_id}_dance_type"] only
@@ -276,7 +259,22 @@ def on_save(page, mode):
     # move videos into appropriate directories.
     root_dir = Path(st.session_state["directory"])
     df = st.session_state["data_df"]
-    swap_category_ids = checkmarked_ids.union(uncheckmarked_ids)
+
+    current_checkmarked = {
+        d_id for d_id in current_day_dance_ids if st.session_state.get(d_id, False)
+    }
+    prev_checkmarked = st.session_state["checkmarked_per_page"].get(current_page, set())
+
+    newly_checked = current_checkmarked - prev_checkmarked
+    newly_unchecked = prev_checkmarked - current_checkmarked
+    swap_category_ids = newly_checked.union(newly_unchecked)
+
+    # Store day_dance_ids for which "Wrong Category" is checkmarked in
+    # separate session state, because the checkbox element keys are
+    # only stored in session state as long as they are being rendered
+    # and discarded when the next page is loaded.
+    st.session_state["checkmarked_per_page"][current_page] = current_checkmarked.copy()
+
     for d_id in current_day_dance_ids:
         dance_type = st.session_state[f"{d_id}_dance_type"]
         if dance_type == DanceType.waggle.name:
@@ -310,6 +308,7 @@ def on_save(page, mode):
                 )
             source = st.session_state["videos"][d_id]
             destination = root_dir.joinpath(dance_dir, source.name)
+            print(f"{d_id} to {destination}")
             move_file(source, destination)
             st.session_state["videos"][d_id] = destination
     st.session_state["data_df"] = df
@@ -345,10 +344,12 @@ def main():
         st.session_state["videos"] = []
     if "current_page" not in st.session_state:
         st.session_state["current_page"] = 1
-    if "checkmarked_ids" not in st.session_state:
-        st.session_state["checkmarked_ids"] = set()
+    # if "checkmarked_ids" not in st.session_state:
+    #     st.session_state["checkmarked_ids"] = set()
     if "dance_types" not in st.session_state:
         st.session_state["dance_types"] = dict()
+    if "checkmarked_per_page" not in st.session_state:
+        st.session_state["checkmarked_per_page"] = {}
 
     show_settings()
     show_videos()
