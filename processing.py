@@ -57,11 +57,13 @@ def main() -> None:
                 waggle_ids.append(json_data["waggle_id"])
                 dance_types.append(json_data["predicted_class_label"])
                 with tempfile.TemporaryDirectory() as tmp_dir:
-                    # Because we don't want to keep the nested directory structure
-                    # which the files within the zip file are in, we assign a new
-                    # name to the filename attribute of a video file, i.e.
-                    # "12/44/8/frames.apng", -> "0001.apng". This leads to a flat
-                    # directory structure.
+                    # Files within the zip file are named like this:
+                    # "12/44/8/frames.apng". This gives us a nested directory
+                    # structure. We want a flat structure instead. Therefore,
+                    # we assign a new name to the filename attribute of the
+                    # video file which doesn't contain slashes and uniquely
+                    # identifies the file.
+                    # For example, "12/44/8/frames.apng" is renamed to "0001.apng".
                     zip_file.getinfo(video_filename).filename = day_dance_id + ".apng"
                     zip_file.extract(video_filename, tmp_dir)
                     input = Path(tmp_dir) / (day_dance_id + ".apng")
