@@ -49,9 +49,7 @@ def main() -> None:
                 metadata_filename = video_filename.replace("frames.apng", "waggle.json")
                 with zip_file.open(metadata_filename) as metadata_file:
                     json_data = json.load(metadata_file)
-                # We only care about waggles, so filter the rest out. Also,
-                # the model thinks the bright pixels of the wooden frame on
-                # the comb are tags, so we ignore those detections.
+                # We only care about waggles, so filter the rest out.
                 if json_data["predicted_class_label"] != "waggle":
                     continue
                 day_dance_id = f"{count:04d}"
